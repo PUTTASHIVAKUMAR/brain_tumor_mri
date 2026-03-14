@@ -10,17 +10,10 @@ The model classifies MRI scans into four categories:
 
 The system is deployed as an interactive **web application using Streamlit**, allowing users to upload MRI images and receive predictions in real time.
 
----
+# Brain Tumor MRI Detection using Deep Learning
 
-# 🌐 Live Demo
-
-🚀 Try the application here:
-
-https://your-streamlit-app-link.streamlit.app
-
-*(Replace this link after deploying the app)*
-
----
+Live Demo:
+https://braintumormri-gacsanpubmnhduajlngpbr.streamlit.app
 
 # 📸 Application Preview
 
