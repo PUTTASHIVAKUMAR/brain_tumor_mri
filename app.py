@@ -1,128 +1,111 @@
-import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import streamlit as st
+import numpy as np
+from PIL import Image
+from tensorflow.keras.models import load_model
 
 # --------------------------------------------------
-# Dataset Paths
+# Page Configuration
 # --------------------------------------------------
-train_path = "dataset/Training"
-test_path = "dataset/Testing"
-
-IMG_SIZE = (224, 224)
-BATCH_SIZE = 16
-
-# --------------------------------------------------
-# Data Augmentation
-# --------------------------------------------------
-train_gen = ImageDataGenerator(
-    rescale=1.0 / 255,
-    rotation_range=20,
-    zoom_range=0.15,
-    width_shift_range=0.1,
-    height_shift_range=0.1,
-    horizontal_flip=True
-)
-
-test_gen = ImageDataGenerator(
-    rescale=1.0 / 255
+st.set_page_config(
+    page_title="Brain Tumor Detector",
+    page_icon="🧠",
+    layout="centered"
 )
 
 # --------------------------------------------------
-# Training Data
+# Load Model
 # --------------------------------------------------
-train_data = train_gen.flow_from_directory(
-    train_path,
-    target_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode="categorical",
-    shuffle=True
+@st.cache_resource
+def load_brain_tumor_model():
+    return load_model("brain_tumor_model.h5")
+
+
+model = load_brain_tumor_model()
+
+# Class names
+class_names = [
+    "glioma",
+    "meningioma",
+    "notumor",
+    "pituitary"
+]
+
+# --------------------------------------------------
+# Application UI
+# --------------------------------------------------
+st.title("🧠 Brain Tumor Detection using AI")
+
+st.write(
+    "Upload a brain MRI image and the AI model will predict "
+    "the tumor type."
+)
+
+uploaded_file = st.file_uploader(
+    "Upload MRI Image",
+    type=["jpg", "jpeg", "png"]
 )
 
 # --------------------------------------------------
-# Testing Data
+# Prediction
 # --------------------------------------------------
-test_data = test_gen.flow_from_directory(
-    test_path,
-    target_size=IMG_SIZE,
-    batch_size=BATCH_SIZE,
-    class_mode="categorical",
-    shuffle=False
-)
+if uploaded_file is not None:
 
-# Print class mapping
-print("Class Mapping:")
-print(train_data.class_indices)
+    try:
+        # Open uploaded image
+        image = Image.open(uploaded_file).convert("RGB")
 
-# --------------------------------------------------
-# Load Pretrained MobileNetV2
-# --------------------------------------------------
-base_model = tf.keras.applications.MobileNetV2(
-    weights="imagenet",
-    include_top=False,
-    input_shape=(224, 224, 3)
-)
+        # Display uploaded image
+        st.image(
+            image,
+            caption="Uploaded MRI Image",
+            width="stretch"
+        )
 
-# Freeze pretrained layers
-base_model.trainable = False
+        # Resize image to model input size
+        img = image.resize((224, 224))
 
-# --------------------------------------------------
-# Build Model
-# --------------------------------------------------
-x = base_model.output
+        # Convert image to NumPy array
+        img_array = np.array(img, dtype=np.float32) / 255.0
 
-x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        # Add batch dimension
+        img_array = np.expand_dims(img_array, axis=0)
 
-x = tf.keras.layers.BatchNormalization()(x)
+        # Make prediction
+        predictions = model.predict(img_array, verbose=0)
 
-x = tf.keras.layers.Dense(
-    128,
-    activation="relu"
-)(x)
+        # Get predicted class
+        predicted_class = int(np.argmax(predictions[0]))
 
-x = tf.keras.layers.Dropout(0.5)(x)
+        # Get confidence
+        confidence = float(np.max(predictions[0]) * 100)
 
-output = tf.keras.layers.Dense(
-    4,
-    activation="softmax"
-)(x)
+        # --------------------------------------------------
+        # Display Prediction
+        # --------------------------------------------------
+        st.subheader("Prediction")
 
-model = tf.keras.Model(
-    inputs=base_model.input,
-    outputs=output
-)
+        st.success(
+            f"Predicted Tumor Type: "
+            f"{class_names[predicted_class].capitalize()}"
+        )
 
-# --------------------------------------------------
-# Compile Model
-# --------------------------------------------------
-model.compile(
-    optimizer="adam",
-    loss="categorical_crossentropy",
-    metrics=["accuracy"]
-)
+        st.write(
+            f"Confidence: {confidence:.2f}%"
+        )
 
-model.summary()
+        # --------------------------------------------------
+        # Class Probabilities
+        # --------------------------------------------------
+        st.subheader("Class Probabilities")
 
-# --------------------------------------------------
-# Train Model
-# --------------------------------------------------
-history = model.fit(
-    train_data,
-    validation_data=test_data,
-    epochs=25
-)
+        for i, prob in enumerate(predictions[0]):
+            st.write(
+                f"{class_names[i].capitalize()}: "
+                f"{prob * 100:.2f}%"
+            )
 
-# --------------------------------------------------
-# Evaluate Model
-# --------------------------------------------------
-loss, accuracy = model.evaluate(test_data)
-
-print(f"Test Accuracy: {accuracy * 100:.2f}%")
-
-# --------------------------------------------------
-# Save Model
-# --------------------------------------------------
-model.save("brain_tumor_model.h5")
-
-print(
-    "✅ Model training complete and saved as "
-    "brain_tumor_model.h5"
-)
+    except Exception as e:
+        st.error(
+            "An error occurred while processing the MRI image."
+        )
+        st.exception(e)
